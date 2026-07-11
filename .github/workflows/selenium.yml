@@ -1,4 +1,4 @@
-name: Run Selenium Script
+name: MC Server Auto Start
 
 on:
   push:
@@ -9,10 +9,6 @@ on:
       - '**.txt'
   workflow_dispatch:
     inputs:
-      use_session_cache:
-        description: "Use session cache"
-        required: false
-        default: "false"
       start_or_stop:
         description: "start or stop"
         required: false
@@ -21,27 +17,15 @@ on:
 jobs:
   run-selenium:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
       - name: Set Up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
 
       - name: Install Dependencies
         run: pip install -r .github/workflows/requirements.txt
@@ -49,75 +33,35 @@ jobs:
       - name: Install jq + unzip
         run: sudo apt-get install -y jq unzip
 
-      - name: Cache Chrome and ChromeDriver
-        id: chrome-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /opt/chrome
-            /usr/local/bin/chromedriver
-          key: chrome-cache-v1
-
-      - name: Install Chrome + ChromeDriver (if cache miss)
-        if: steps.chrome-cache.outputs.cache-hit != 'true'
-        id: install-chrome
+      - name: Install Fresh Chrome + ChromeDriver
         run: |
+          echo "🛠️ Installing latest Chrome and matching ChromeDriver..."
           LATEST_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
-          echo "chrome_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          echo "Latest Chrome version: $LATEST_VERSION"
-
-          CHROME_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip"
-          wget "$CHROME_URL" -O chrome.zip
+          echo "Version: $LATEST_VERSION"
+          
+          wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip -O chrome.zip
           unzip -q chrome.zip
           sudo mv chrome-linux64 /opt/chrome
           sudo chmod +x /opt/chrome/chrome
           sudo ln -sf /opt/chrome/chrome /usr/bin/google-chrome
-
-          DRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chromedriver-linux64.zip"
-          wget "$DRIVER_URL" -O chromedriver.zip
+          
+          wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chromedriver-linux64.zip -O chromedriver.zip
           unzip -q chromedriver.zip
-          chmod +x chromedriver-linux64/chromedriver
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+          sudo chmod +x /usr/local/bin/chromedriver
+          
+          echo "✅ Fresh Chrome installed successfully"
 
-      - name: Restore Session Cache
-        if: ${{ inputs.use_session_cache == 'true' }}
-        id: restore-session
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/seedloaf-session
-          key: seedloaf-session-cache-${{ github.run_id }}
-          restore-keys: |
-            seedloaf-session-cache-
-
-      - name: Run Selenium Start Script (with Email OTP)
+      - name: Run Start Script
         if: ${{ inputs.start_or_stop == 'true' }}
         env:
           EMAIL: ${{ secrets.EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          # USERNAME/PASSWORD removed → now handled inside Python with OTP
         run: python .github/workflows/websitebotex.py
 
-      - name: Run Selenium Stop Script
+      - name: Run Stop Script
         if: ${{ inputs.start_or_stop == 'false' }}
         env:
           EMAIL: ${{ secrets.EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python .github/workflows/websitebotstop.py
-
-      - name: Check for new session
-        if: ${{ inputs.use_session_cache == 'true' }}
-        id: session-check
-        run: |
-          if [ -f /tmp/seedloaf-session/.valid_session ]; then
-            echo "valid=true" >> $GITHUB_OUTPUT
-          else
-            echo "valid=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Save session cache
-        if: ${{ inputs.use_session_cache == 'true' && steps.session-check.outputs.valid == 'true' }}
-        uses: actions/cache/save@v4
-        continue-on-error: true
-        with:
-          path: /tmp/seedloaf-session
-          key: seedloaf-session-cache-${{ github.run_number }}
