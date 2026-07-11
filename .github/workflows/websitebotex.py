@@ -57,7 +57,6 @@ def init_driver():
     return driver
 
 def get_latest_verification_code():
-    """Outlookから最新6桁コードを取得"""
     try:
         mail = imaplib.IMAP4_SSL("outlook.office365.com", 993)
         mail.login(EMAIL, EMAIL_PASSWORD)
@@ -85,7 +84,7 @@ def get_latest_verification_code():
         
         code_match = re.search(r'\b(\d{6})\b', body)
         if code_match:
-            print(f"✅ 認証コード取得成功: {code_match.group(1)}")
+            print(f"✅ 認証コード: {code_match.group(1)}")
             return code_match.group(1)
         return None
     except Exception as e:
@@ -100,51 +99,48 @@ def get_latest_verification_code():
 def main():
     driver = None
     try:
-        print("🚀 Seedloaf 自動ログイン開始...")
+        print("🚀 Seedloaf 自動ログイン開始 (Email + OTP)")
         driver = init_driver()
         wait = WebDriverWait(driver, 25)
         
         driver.get(SITE_URL)
-        print("ログインページにアクセス")
+        print("ログインページアクセス完了")
         
-        # 1. Email入力 → Continue
+        # Email入力
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "email")))
         email_field.clear()
         email_field.send_keys(EMAIL)
         print("メールアドレス入力完了")
         
+        # Continueボタン
         continue_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Continue')]")))
         continue_btn.click()
-        print("Continueボタンクリック")
+        print("Continueクリック → コード送信")
         
-        # 2. メール到着待ち
-        time.sleep(10)
+        time.sleep(10)  # メール到着待ち
         
-        # 3. 認証コード取得
+        # 認証コード取得
         code = get_latest_verification_code()
         if not code:
-            raise Exception("認証コードを取得できませんでした")
+            raise Exception("認証コード取得失敗")
         
-        # 4. 6桁コード入力（6つの入力欄）
-        print("6桁コードを入力中...")
+        # 6桁コード入力
+        print("6桁コード入力中...")
         code_digits = list(code)
-        inputs = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "input[type='text'], input[autocomplete='one-time-code']")))
+        inputs = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "input[type='text']")))
         
-        for i, digit in enumerate(code_digits[:len(inputs)]):
-            inputs[i].send_keys(digit)
+        for i, digit in enumerate(code_digits):
+            if i < len(inputs):
+                inputs[i].send_keys(digit)
         
         print("コード入力完了")
         
-        # 5. Continueボタンクリック
-        final_continue = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Continue')]")))
-        final_continue.click()
-        print("最終Continueボタンクリック")
+        # 最後のContinue
+        final_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Continue')]")))
+        final_btn.click()
         
-        # ログイン成功確認
-        wait.until(EC.url_contains("/dashboard"))
-        print("✅ ログイン成功！ ダッシュボードに移動しました")
+        print("✅ ログイン成功！")
         
-        # セッション保存
         with open(f"{SESSION_DIR}/.valid_session", "w") as f:
             f.write("valid")
             
@@ -152,7 +148,7 @@ def main():
         print(f"❌ エラー: {e}")
         if driver:
             driver.save_screenshot(f"{SESSION_DIR}/error.png")
-            print("📸 エラー画面を保存しました (error.png)")
+            print("📸 error.png を保存しました")
     finally:
         if driver:
             driver.quit()
