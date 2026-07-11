@@ -1,4 +1,4 @@
-name: Run Selenium Script 
+name: Run Selenium Script
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-          
+
       - name: Cache pip dependencies
         uses: actions/cache@v3
         with:
@@ -42,11 +42,11 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-            
+
       - name: Install Dependencies
         run: pip install -r .github/workflows/requirements.txt
 
-      - name: Install jq
+      - name: Install jq + unzip
         run: sudo apt-get install -y jq unzip
 
       - name: Cache Chrome and ChromeDriver
@@ -58,16 +58,14 @@ jobs:
             /usr/local/bin/chromedriver
           key: chrome-cache-v1
 
-      - name: Check Chrome and Chrome driver
+      - name: Install Chrome + ChromeDriver (if cache miss)
         if: steps.chrome-cache.outputs.cache-hit != 'true'
         id: install-chrome
         run: |
-          # Get Latest Stable Chrome Version
           LATEST_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
           echo "chrome_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
           echo "Latest Chrome version: $LATEST_VERSION"
 
-          # Intall Chrome and Chrome driver
           CHROME_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip"
           wget "$CHROME_URL" -O chrome.zip
           unzip -q chrome.zip
@@ -75,17 +73,11 @@ jobs:
           sudo chmod +x /opt/chrome/chrome
           sudo ln -sf /opt/chrome/chrome /usr/bin/google-chrome
 
-          # Install ChromeDriver to /usr/local/bin
           DRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chromedriver-linux64.zip"
           wget "$DRIVER_URL" -O chromedriver.zip
           unzip -q chromedriver.zip
           chmod +x chromedriver-linux64/chromedriver
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
-
-      - name: Debug Secrets
-        env:
-          USERNAME: ${{ secrets.USERNAME }}
-        run: echo "USERNAME is $USERNAME"
 
       - name: Restore Session Cache
         if: ${{ inputs.use_session_cache == 'true' }}
@@ -97,18 +89,19 @@ jobs:
           restore-keys: |
             seedloaf-session-cache-
 
-      - name: Run Selenium Start Script
+      - name: Run Selenium Start Script (with Email OTP)
         if: ${{ inputs.start_or_stop == 'true' }}
         env:
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          EMAIL: ${{ secrets.EMAIL }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          # USERNAME/PASSWORD removed → now handled inside Python with OTP
         run: python .github/workflows/websitebotex.py
 
       - name: Run Selenium Stop Script
         if: ${{ inputs.start_or_stop == 'false' }}
         env:
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          EMAIL: ${{ secrets.EMAIL }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python .github/workflows/websitebotstop.py
 
       - name: Check for new session
@@ -120,7 +113,7 @@ jobs:
           else
             echo "valid=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Save session cache
         if: ${{ inputs.use_session_cache == 'true' && steps.session-check.outputs.valid == 'true' }}
         uses: actions/cache/save@v4
