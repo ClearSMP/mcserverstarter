@@ -25,7 +25,7 @@ jobs:
       - name: Set Up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Dependencies
         run: pip install -r .github/workflows/requirements.txt
@@ -36,24 +36,22 @@ jobs:
       - name: Install Fresh Chrome + ChromeDriver
         run: |
           echo "🛠️ Installing latest Chrome and matching ChromeDriver..."
-          
+
           JSON=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json)
           LATEST_VERSION=$(echo $JSON | jq -r '.channels.Stable.version')
           echo "Version: $LATEST_VERSION"
-          
-          # Chrome
+
           wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip -O chrome.zip
           unzip -q chrome.zip
           sudo mv chrome-linux64 /opt/chrome
           sudo chmod +x /opt/chrome/chrome
           sudo ln -sf /opt/chrome/chrome /usr/bin/google-chrome
-          
-          # ChromeDriver
+
           wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chromedriver-linux64.zip -O chromedriver.zip
           unzip -q chromedriver.zip
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
-          
+
           echo "Chrome version: $(google-chrome --version)"
           echo "ChromeDriver version: $(chromedriver --version)"
           echo "✅ Installation completed"
@@ -71,3 +69,13 @@ jobs:
           EMAIL: ${{ secrets.EMAIL }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
         run: python .github/workflows/websitebotstop.py
+
+      - name: Upload debug files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-debug
+          if-no-files-found: ignore
+          path: |
+            error.png
+            page.html
