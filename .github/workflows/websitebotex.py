@@ -34,7 +34,13 @@ def get_chrome_options():
 
 def init_driver():
     service = Service("/usr/local/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=get_chrome_options())
+    options = get_chrome_options()
+    
+    # 追加の互換性オプション
+    options.add_argument("--remote-debugging-port=9222")
+    options.add_argument("--disable-features=Translate")
+    
+    driver = webdriver.Chrome(service=service, options=options)
     selenium_stealth.stealth(driver, languages=["ja-JP", "ja"])
     return driver
 
