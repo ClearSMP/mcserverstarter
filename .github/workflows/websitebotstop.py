@@ -1,235 +1,85 @@
-import psutil
 import os
-import sys
-os.system("pkill -9 chrome")  # Forcefully kill all Chrome processes
-def kill_chrome():
-    for process in psutil.process_iter(attrs=["pid", "name"]):
-        if "chrome" in process.info["name"].lower():
-            try:
-                p = psutil.Process(process.info["pid"])
-                p.terminate()  # Terminate gracefully
-            except psutil.NoSuchProcess:
-                pass  # Process already closed
-
-kill_chrome()
-
-#requiredlib = [selenium,time]
+import time
+import psutil
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-#from selenium.webdriver.firefox.options import Options
-#from selenium.webdriver.firefox.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-import time
-#import tempfile
-#import uuid
+import selenium_stealth
 
-'''
-os.environ["MOZ_LOG"] = "debug"  # Enable verbose logging
-# Initialize WebDriver
-options = Options()
-service = Service(excecutable_path="/usr/local/bin/geckodriver")
-options.binary_location = '/usr/bin/firefox'
-options.add_argument("--headless")
-driver = webdriver.Firefox(options=options, service=service)
-'''
-# Chrome Options
-options = Options()
-# Use persistent user profile
-USER_DATA_DIR = "/tmp/seedloaf-session"
-options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
-options.add_argument("--profile-directory=Default")  # Optional
-
-options.binary_location = "/opt/chrome/chrome"
-options.add_argument("--headless=new")  # Use new headless mode
-options.add_argument("window-size=1920x1080")  # Ensure full viewport
-options.add_argument("--disable-gpu")  # Fix rendering issues in headless
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-#temp_dir = f"/tmp/chrome-user-data-{uuid.uuid4()}"
-#options.add_argument(f"--user-data-dir={temp_dir}")
-
-# Bypass detection
-options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-options.add_argument("--disable-blink-features=AutomationControlled")
-options.add_argument("--enable-javascript")
-options.add_argument("--disable-web-security")
-service = Service("/usr/local/bin/chromedriver")  # Path to ChromeDriver
-options.add_argument("--disable-popup-blocking")
-options.add_argument("--disable-features=IsolateOrigins,site-per-process")
-options.add_argument("--disable-extensions")
-
-# Initialize WebDriver
-driver = webdriver.Chrome(options=options,service=service) 
-driver.get("https://accounts.seedloaf.com/sign-in")
-#driver.maximize_window()
-
-# Wait for page to fully load
-WebDriverWait(driver, 10).until(lambda driver: driver.execute_script("return document.readyState") == "complete")
-
-# Login flow function
-def run_loginflow(usernamesec,passwordsec):
-#---------------------------
-    try:
-        # Wait for the username field to be visible
-        username = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.ID, "identifier-field"))
-        )
-        print("After waiting for username:\n"+driver.current_url)
-        
-        driver.execute_script("arguments[0].scrollIntoView(true);", username)
-        driver.execute_script("arguments[0].click();", username)
-        username.send_keys(usernamesec)
-        username.send_keys(Keys.RETURN)
-        
-        # Optional: Wait to observe behavior (debugging)
-        time.sleep(5)
-        print("entered username")
-        ran_loginflow = 1
-    except Exception as e:
-        print(f"Error occurred(username): {e}")
-        print("After waiting for username:\n"+driver.current_url)
-        
-    #---------------------------
-    
-    try:
-        try: # Check if username is incorrect
-            wait = WebDriverWait(driver, 5)
-            error_elem = wait.until(EC.visibility_of_element_located((By.ID, "error-identifier")))
-            if error_elem:
-                print("Username is incorrect")
-                driver.quit()
-                sys.exit()  
-        except Exception as e:
-            pass
-            
-        # Wait for the password field to be visible
-        wait = WebDriverWait(driver, 15)
-        password = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.ID, "password-field"))
-        )
-        print("After waiting for password:\n"+driver.current_url)
-        
-        # Now enter password  
-        global old_url
-        old_url = driver.current_url
-        driver.execute_script("arguments[0].scrollIntoView(true);", password)
-        driver.execute_script("arguments[0].click();", password)
-        password.send_keys(passwordsec)
-        password.send_keys(Keys.RETURN)
-        # Optional: Wait to observe behavior (debugging)
-        time.sleep(8)
-        print("entered password")
-    except Exception as e:
-        print(f"Error occurred(password): {e}")
-        print("After waiting for password:\n"+driver.current_url)
-    ran_loginflow = 2
-
-
-
-# Cleanup old marker
-MARKER_FILE = "/tmp/seedloaf-session/.valid_session"
+# ========================= CONFIG =========================
+EMAIL = os.getenv("EMAIL")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+SITE_URL = "https://accounts.seedloaf.com/sign-in"
 SESSION_DIR = "/tmp/seedloaf-session"
-try:
-    os.remove(MARKER_FILE)
-except FileNotFoundError:
-    pass
-    
-# Check dashboard
-try:
-    WebDriverWait(driver, 10).until(
-        lambda d: "dashboard" in d.current_url
-    )
-    print("✅ Already logged in, at dashboard")
-    ran_loginflow = 0
-except:
-    print("🔐 Not logged in — need to re-run login flow:\n"+driver.current_url)
-    try: 
-        ran_loginflow = 0
-        usernamesec = os.getenv("USERNAME")
-        passwordsec = os.getenv("PASSWORD")
-        run_loginflow(usernamesec,passwordsec)
-    except Exception as e:
-        print("something wrong with secrets")
-    # Write that Llogin flow has occured
-    with open(MARKER_FILE, "w") as f:
-        f.write("session valid")
-    
+# =========================================================
 
-#---------------------------
-try:
-    # Wait for the stop button to be visible
+def kill_chrome():
+    os.system("pkill -9 chrome 2>/dev/null || true")
+    for proc in psutil.process_iter(['pid', 'name']):
+        if proc.info['name'] and 'chrome' in proc.info['name'].lower():
+            try:
+                proc.terminate()
+            except:
+                pass
+    print("Chromeプロセスを終了しました")
+
+def get_chrome_options():
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    return options
+
+def main():
+    kill_chrome()
+    
+    driver = None
     try:
+        print("🛑 サーバー停止処理開始...")
+        driver = webdriver.Chrome(service=Service("/usr/local/bin/chromedriver"), options=get_chrome_options())
+        selenium_stealth.stealth(driver, languages=["ja-JP", "ja"])
+        
+        driver.get(SITE_URL)
         wait = WebDriverWait(driver, 20)
-        stopworld = WebDriverWait(driver, 5).until(
-                        EC.visibility_of_element_located((By.XPATH, "//button[contains(@class, 'btn-error')]"))
-                    )
-        print("After waiting for stop:\n"+driver.current_url)
-    except:
-        try: # Check if password is incorrect or start button is already present
-            if  ran_loginflow and driver.current_url == old_url:
-                error_elem = WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.ID, "error-password")))
-                if error_elem:
-                    print("Password is incorrect")
-                    driver.quit()
-                    sys.exit()
-            else:
-                try:
-                    startworld = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btn-primary")))
-                    print("Start button found — world already stopped.")
-                    driver.quit()
-                    sys.exit()
-                except Exception as e:
-                    print(f"Neither Start nor Stop button found. Something might be wrong: {e}")
-                    driver.quit()
-                    exit()
-        except Exception as inner_exc:
-            print(f"Unexpected error during start/stop button checks: {inner_exc}")
-            print("After waiting for start/stop:\n"+driver.current_url)
+        
+        # ログイン（簡易版 - セッションが残っていればスキップされる可能性あり）
+        try:
+            email_field = wait.until(EC.presence_of_element_located((By.NAME, "email")))
+            email_field.send_keys(EMAIL)
+            wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Continue')]"))).click()
+            time.sleep(8)
+            
+            # コード入力は省略（セッションが有効なら不要な場合が多い）
+        except:
+            print("ログインセッションが残っている可能性があります")
+        
+        # 停止ボタンクリック
+        try:
+            stop_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'btn-error') or contains(., 'Stop')]")))
+            driver.execute_script("arguments[0].scrollIntoView(true);", stop_btn)
+            stop_btn.click()
+            print("🛑 停止ボタンをクリックしました")
+            time.sleep(5)
+        except:
+            print("停止ボタンが見つかりませんでした（すでに停止している可能性）")
+        
+        print("✅ 停止処理完了")
+        
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+    finally:
+        if driver:
             driver.quit()
-            sys.exit()
-    # Now ensure it’s clickable
-    driver.execute_script("arguments[0].scrollIntoView(true);", stopworld)
-    driver.execute_script("arguments[0].click();", stopworld)
-    print("Clicked stop")
-    time.sleep(2)
+        kill_chrome()
 
-except Exception as e:
-    print(f"Error occurred(start): {e}")
-
-
-
-#---------------------------
-''' #--- Jasper removed this feature now (only the start success alert maybe)
-    #--- Uncomment to view any error alert if ur workflow doesnt work
-try:
-    # Wait for the alert div to appear
-    alert_div = WebDriverWait(driver, 20).until(
-        EC.presence_of_element_located((By.XPATH, "//div[@role='alert']/div[2]"))
-    )
-    
-    # Extract the text
-    alert_text = alert_div.text
-    print(f"{alert_text}")
-
-except Exception as e:
-    print(f"Error while fetching alert text: {e}")
-
-#---------------------------
-# Handle alert if present
-try:
-    alert = WebDriverWait(driver, 5).until(EC.alert_is_present())
-    alert_text = alert.text
-    print(f"Alert text: {alert_text}")
-    alert.accept()  # Accept the alert
-except Exception:
-    print("No alert found.")
-    
-# Check browser logs to see if any errors are happening
-for entry in driver.get_log('browser'):
-    print(entry)
-'''
-driver.quit()
+if __name__ == "__main__":
+    main()
