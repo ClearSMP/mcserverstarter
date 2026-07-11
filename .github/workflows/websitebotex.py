@@ -20,6 +20,7 @@ os.makedirs(SESSION_DIR, exist_ok=True)
 
 def get_chrome_options():
     options = Options()
+    options.binary_location = "/usr/bin/google-chrome"  # 明示的に指定
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
@@ -38,10 +39,13 @@ def init_driver():
     return driver
 
 def save_debug_info(driver, step):
-    driver.save_screenshot(f"{SESSION_DIR}/{step}_screenshot.png")
-    with open(f"{SESSION_DIR}/{step}_page.html", "w", encoding="utf-8") as f:
-        f.write(driver.page_source)
-    print(f"📸 デバッグ情報保存: {step}")
+    try:
+        driver.save_screenshot(f"{SESSION_DIR}/{step}_screenshot.png")
+        with open(f"{SESSION_DIR}/{step}_page.html", "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        print(f"📸 デバッグ保存: {step}")
+    except:
+        pass
 
 def get_latest_verification_code():
     try:
@@ -78,14 +82,12 @@ def main():
         print("ページロード完了")
         save_debug_info(driver, "1_after_load")
         
-        # Email入力
         email_field = wait.until(EC.presence_of_element_located((By.NAME, "email")))
         email_field.clear()
         email_field.send_keys(EMAIL)
         print("メール入力完了")
         save_debug_info(driver, "2_after_email")
         
-        # Continue
         continue_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Continue')]")))
         continue_btn.click()
         print("Continueクリック")
@@ -96,17 +98,15 @@ def main():
         code = get_latest_verification_code()
         if not code:
             raise Exception("コード取得失敗")
-        print(f"コード取得: {code}")
+        print(f"コード: {code}")
         
-        # 6桁入力
         inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='text']")
         for i, d in enumerate(code):
             if i < len(inputs):
                 inputs[i].send_keys(d)
-        print("コード入力完了")
+        print("6桁入力完了")
         save_debug_info(driver, "4_after_code")
         
-        # 最終Continue
         final_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Continue')]")))
         final_btn.click()
         print("✅ ログイン成功！")
