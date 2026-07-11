@@ -33,21 +33,11 @@ jobs:
       - name: Install jq + unzip
         run: sudo apt-get install -y jq unzip
 
-      - name: Cache Chrome and ChromeDriver
-        id: chrome-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /opt/chrome
-            /usr/local/bin/chromedriver
-          key: chrome-cache-v5-${{ github.run_id }}  # 毎回強制インストール
-          restore-keys: chrome-cache-v5-
-
-      - name: Install Chrome + ChromeDriver
-        if: steps.chrome-cache.outputs.cache-hit != 'true'
+      - name: Install Fresh Chrome + ChromeDriver
         run: |
+          echo "🛠️ Installing latest Chrome and matching ChromeDriver..."
           LATEST_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
-          echo "Installing Chrome version: $LATEST_VERSION"
+          echo "Version: $LATEST_VERSION"
           
           wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip -O chrome.zip
           unzip -q chrome.zip
@@ -59,6 +49,8 @@ jobs:
           unzip -q chromedriver.zip
           sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
+          
+          echo "✅ Fresh Chrome installed successfully"
 
       - name: Run Start Script
         if: ${{ inputs.start_or_stop == 'true' }}
