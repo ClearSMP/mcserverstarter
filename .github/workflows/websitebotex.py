@@ -206,8 +206,9 @@ def get_latest_verification_code(timeout=120):
         try:
 
             mail = imaplib.IMAP4_SSL(
-                "imap.gmail.com"
-            )
+            "outlook.office365.com",
+            993
+)
 
             mail.login(
                 EMAIL,
