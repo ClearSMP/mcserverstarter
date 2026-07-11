@@ -34,13 +34,16 @@ def get_chrome_options():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
 
+    options.add_argument("--lang=ja-JP")
+
     options.add_argument(
         "--disable-blink-features=AutomationControlled"
     )
 
     options.add_argument(
         "--user-agent="
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
     )
 
     options.add_experimental_option(
@@ -64,12 +67,12 @@ def init_driver():
 
     selenium_stealth.stealth(
         driver,
-        languages=["ja-JP","ja"],
+        languages=["ja-JP", "ja"],
         vendor="Google Inc.",
         platform="Win32",
         webgl_vendor="Intel Inc.",
         renderer="Intel Iris OpenGL",
-        fix_hairline=True
+        fix_hairline=True,
     )
 
     return driver
@@ -94,14 +97,51 @@ def save_debug(driver):
                 driver.page_source
             )
 
-        print("debug保存完了")
+        print(
+            "debug保存完了"
+        )
 
     except Exception as e:
 
         print(
-            "debug error:",
+            "debug保存失敗:",
             e
         )
+
+
+
+def wait_page_ready(driver):
+
+    print(
+        "⏳ ページ待機開始"
+    )
+
+    for i in range(60):
+
+        title = driver.title
+
+        print(
+            f"{i+1}/60:",
+            title
+        )
+
+        if (
+            "しばらくお待ちください" not in title
+            and
+            "Just a moment" not in title
+        ):
+            print(
+                "ページ切替確認"
+            )
+            return
+
+
+        time.sleep(2)
+
+
+    raise Exception(
+        "ページ待機タイムアウト"
+    )
 
 
 
@@ -128,7 +168,7 @@ def find_email_input(driver):
 
             element = WebDriverWait(
                 driver,
-                5
+                10
             ).until(
                 EC.presence_of_element_located(
                     (
@@ -139,141 +179,117 @@ def find_email_input(driver):
             )
 
             print(
-                "email input found:",
+                "入力欄発見:",
                 selector
             )
 
             return element
-
 
         except:
 
             pass
 
 
-    # iframe確認
-
-    frames = driver.find_elements(
-        By.TAG_NAME,
-        "iframe"
-    )
-
-    print(
-        "iframe:",
-        len(frames)
-    )
-
-
-    for frame in frames:
-
-        driver.switch_to.frame(frame)
-
-        for selector in selectors:
-
-            try:
-
-                element = driver.find_element(
-                    By.CSS_SELECTOR,
-                    selector
-                )
-
-                print(
-                    "iframe email found:",
-                    selector
-                )
-
-                return element
-
-
-            except:
-
-                pass
-
-
-        driver.switch_to.default_content()
-
-
     raise Exception(
-        "email input not found"
+        "メール入力欄が見つかりません"
     )
 
 
 
-def get_latest_verification_code():
+def get_latest_verification_code(timeout=120):
 
-    mail = imaplib.IMAP4_SSL(
-        "imap.gmail.com"
-    )
-
-    mail.login(
-        EMAIL,
-        EMAIL_PASSWORD
-    )
-
-    mail.select(
-        "inbox"
-    )
+    start = time.time()
 
 
-    _, messages = mail.search(
-        None,
-        "ALL"
-    )
+    while time.time() - start < timeout:
+
+        try:
+
+            mail = imaplib.IMAP4_SSL(
+                "imap.gmail.com"
+            )
+
+            mail.login(
+                EMAIL,
+                EMAIL_PASSWORD
+            )
+
+            mail.select(
+                "inbox"
+            )
 
 
-    for msg_id in reversed(
-        messages[0].split()
-    ):
-
-        _, data = mail.fetch(
-            msg_id,
-            "(RFC822)"
-        )
+            _, messages = mail.search(
+                None,
+                "ALL"
+            )
 
 
-        msg = email.message_from_bytes(
-            data[0][1]
-        )
+            for msg_id in reversed(
+                messages[0].split()[-20:]
+            ):
+
+                _, data = mail.fetch(
+                    msg_id,
+                    "(RFC822)"
+                )
 
 
-        body = ""
+                msg = email.message_from_bytes(
+                    data[0][1]
+                )
 
 
-        if msg.is_multipart():
+                body = ""
 
-            for part in msg.walk():
 
-                if part.get_content_type()=="text/plain":
+                if msg.is_multipart():
 
-                    body += part.get_payload(
+                    for part in msg.walk():
+
+                        if part.get_content_type() == "text/plain":
+
+                            body += part.get_payload(
+                                decode=True
+                            ).decode(
+                                errors="ignore"
+                            )
+
+                else:
+
+                    body = msg.get_payload(
                         decode=True
                     ).decode(
                         errors="ignore"
                     )
 
-        else:
 
-            body = msg.get_payload(
-                decode=True
-            ).decode(
-                errors="ignore"
-            )
+                result = re.search(
+                    r"\b\d{6}\b",
+                    body
+                )
 
 
-        code = re.search(
-            r"\b\d{6}\b",
-            body
-        )
+                if result:
 
+                    mail.logout()
 
-        if code:
+                    return result.group(0)
+
 
             mail.logout()
 
-            return code.group(0)
+
+        except Exception as e:
+
+            print(
+                "メール確認:",
+                e
+            )
 
 
-    mail.logout()
+        time.sleep(5)
+
 
     return None
 
@@ -281,7 +297,7 @@ def get_latest_verification_code():
 
 def main():
 
-    driver=None
+    driver = None
 
 
     try:
@@ -291,7 +307,7 @@ def main():
         )
 
 
-        driver=init_driver()
+        driver = init_driver()
 
 
         driver.get(
@@ -304,17 +320,18 @@ def main():
             driver.current_url
         )
 
-
         print(
             "TITLE:",
             driver.title
         )
 
 
-        time.sleep(5)
+        wait_page_ready(
+            driver
+        )
 
 
-        email_field=find_email_input(
+        email_field = find_email_input(
             driver
         )
 
@@ -329,7 +346,7 @@ def main():
         )
 
 
-        btn=WebDriverWait(
+        continue_btn = WebDriverWait(
             driver,
             20
         ).until(
@@ -342,7 +359,7 @@ def main():
         )
 
 
-        btn.click()
+        continue_btn.click()
 
 
         print(
@@ -350,21 +367,18 @@ def main():
         )
 
 
-        time.sleep(10)
-
-
-        code=get_latest_verification_code()
+        code = get_latest_verification_code()
 
 
         if not code:
 
             raise Exception(
-                "コード取得失敗"
+                "認証コード取得失敗"
             )
 
 
         print(
-            "code:",
+            "コード:",
             code
         )
 
@@ -372,16 +386,18 @@ def main():
     except Exception as e:
 
         print(
-            "ERROR:",
+            "❌ ERROR:",
             type(e).__name__,
             e
         )
+
 
         if driver:
 
             save_debug(
                 driver
             )
+
 
         raise
 
@@ -398,6 +414,6 @@ def main():
 
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     main()
