@@ -1,14 +1,59 @@
-name: Always Fail Check
+name: MC Server Auto Start
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      start_or_stop:
+        description: "start or stop"
+        required: false
+        default: "true"
 
 jobs:
-  fail-job:
+  run-selenium:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Run failing script
-        run: exit 1
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r .github/workflows/requirements.txt
+
+      - name: Install jq and unzip
+        run: sudo apt-get install -y jq unzip
+
+      - name: Cache Chrome
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/chrome
+            /usr/local/bin/chromedriver
+          key: chrome-cache-v2
+
+      - name: Install Chrome if needed
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          LATEST=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
+          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST}/linux64/chrome-linux64.zip -O chrome.zip
+          unzip -q chrome.zip
+          sudo mv chrome-linux64 /opt/chrome
+          sudo ln -sf /opt/chrome/chrome /usr/bin/google-chrome
+          
+          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST}/linux64/chromedriver-linux64.zip -O driver.zip
+          unzip -q driver.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
+
+      - name: Run Login Script
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python .github/workflows/websitebotex.py
