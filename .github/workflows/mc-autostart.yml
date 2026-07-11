@@ -1,0 +1,68 @@
+name: MC Server Auto Start
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+  workflow_dispatch:
+    inputs:
+      start_or_stop:
+        description: "start or stop"
+        required: false
+        default: "true"
+
+jobs:
+  run-selenium:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install -r .github/workflows/requirements.txt
+
+      - name: Install jq + unzip
+        run: sudo apt-get install -y jq unzip
+
+      - name: Install Chrome and ChromeDriver (Fresh Install)
+        run: |
+          LATEST_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
+          echo "Installing fresh Chrome version: $LATEST_VERSION"
+          
+          # Chrome
+          wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip -O chrome.zip
+          unzip -q chrome.zip
+          sudo mv chrome-linux64 /opt/chrome
+          sudo chmod +x /opt/chrome/chrome
+          sudo ln -sf /opt/chrome/chrome /usr/bin/google-chrome
+          
+          # ChromeDriver
+          wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chromedriver-linux64.zip -O chromedriver.zip
+          unzip -q chromedriver.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+          sudo chmod +x /usr/local/bin/chromedriver
+          
+          echo "✅ Chrome & ChromeDriver installed successfully"
+
+      - name: Run Start Script
+        if: ${{ inputs.start_or_stop == 'true' }}
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python .github/workflows/websitebotex.py
+
+      - name: Run Stop Script
+        if: ${{ inputs.start_or_stop == 'false' }}
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: python .github/workflows/websitebotstop.py
