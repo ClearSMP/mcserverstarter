@@ -245,7 +245,7 @@ def get_latest_verification_code(timeout=120):
         try:
 
             mail = imaplib.IMAP4_SSL(
-                "outlook.office365.com",
+                "imap-mail.outlook.com",
                 993
             )
 
