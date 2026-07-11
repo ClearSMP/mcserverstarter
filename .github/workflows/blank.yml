@@ -2,7 +2,8 @@ name: MC Server Auto Start
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
     paths-ignore:
       - '**.md'
       - '**.txt'
@@ -18,17 +19,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set Up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pip install -r .github/workflows/requirements.txt
 
-      - name: Install jq unzip
+      - name: Install jq + unzip
         run: sudo apt-get install -y jq unzip
 
       - name: Cache Chrome and ChromeDriver
@@ -38,14 +40,14 @@ jobs:
           path: |
             /opt/chrome
             /usr/local/bin/chromedriver
-          key: chrome-cache-v4-${{ github.run_id }}
-          restore-keys: chrome-cache-v4-
+          key: chrome-cache-v5-${{ github.run_id }}  # 毎回強制インストール
+          restore-keys: chrome-cache-v5-
 
       - name: Install Chrome + ChromeDriver
         if: steps.chrome-cache.outputs.cache-hit != 'true'
         run: |
           LATEST_VERSION=$(curl -s https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')
-          echo "Installing Chrome $LATEST_VERSION"
+          echo "Installing Chrome version: $LATEST_VERSION"
           
           wget -q https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_VERSION}/linux64/chrome-linux64.zip -O chrome.zip
           unzip -q chrome.zip
