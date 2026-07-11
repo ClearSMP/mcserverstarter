@@ -23,6 +23,7 @@ os.makedirs(SESSION_DIR, exist_ok=True)
 
 
 def get_chrome_options():
+
     options = Options()
 
     options.binary_location = "/usr/bin/google-chrome"
@@ -39,18 +40,12 @@ def get_chrome_options():
 
     options.add_argument(
         "--user-agent="
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     )
 
     options.add_experimental_option(
         "excludeSwitches",
         ["enable-automation"]
-    )
-
-    options.add_experimental_option(
-        "useAutomationExtension",
-        False
     )
 
     options.add_argument(
@@ -60,9 +55,8 @@ def get_chrome_options():
     return options
 
 
-def init_driver():
 
-    print("Chrome起動")
+def init_driver():
 
     driver = webdriver.Chrome(
         options=get_chrome_options()
@@ -70,124 +64,15 @@ def init_driver():
 
     selenium_stealth.stealth(
         driver,
-        languages=["ja-JP", "ja"],
+        languages=["ja-JP","ja"],
         vendor="Google Inc.",
         platform="Win32",
         webgl_vendor="Intel Inc.",
         renderer="Intel Iris OpenGL",
-        fix_hairline=True,
+        fix_hairline=True
     )
 
     return driver
-
-
-def get_latest_verification_code(timeout=120):
-
-    print("📧 認証コード取得開始")
-
-    start = time.time()
-
-    while time.time() - start < timeout:
-
-        try:
-            mail = imaplib.IMAP4_SSL(
-                "imap.gmail.com"
-            )
-
-            mail.login(
-                EMAIL,
-                EMAIL_PASSWORD
-            )
-
-            mail.select("inbox")
-
-
-            status, messages = mail.search(
-                None,
-                "ALL"
-            )
-
-            if status != "OK":
-                time.sleep(5)
-                continue
-
-
-            ids = messages[0].split()
-
-
-            for msg_id in reversed(ids[-20:]):
-
-                status, data = mail.fetch(
-                    msg_id,
-                    "(RFC822)"
-                )
-
-                if status != "OK":
-                    continue
-
-
-                msg = email.message_from_bytes(
-                    data[0][1]
-                )
-
-
-                body = ""
-
-
-                if msg.is_multipart():
-
-                    for part in msg.walk():
-
-                        if part.get_content_type() == "text/plain":
-
-                            body += part.get_payload(
-                                decode=True
-                            ).decode(
-                                errors="ignore"
-                            )
-
-                else:
-
-                    body = msg.get_payload(
-                        decode=True
-                    ).decode(
-                        errors="ignore"
-                    )
-
-
-                code = re.search(
-                    r"\b\d{6}\b",
-                    body
-                )
-
-
-                if code:
-
-                    mail.logout()
-
-                    print(
-                        "コード取得:",
-                        code.group(0)
-                    )
-
-                    return code.group(0)
-
-
-            mail.logout()
-
-
-        except Exception as e:
-
-            print(
-                "メール取得エラー:",
-                e
-            )
-
-
-        time.sleep(5)
-
-
-    return None
 
 
 
@@ -195,12 +80,9 @@ def save_debug(driver):
 
     try:
 
-        print("📸 debug保存")
-
         driver.save_screenshot(
             "error.png"
         )
-
 
         with open(
             "page.html",
@@ -212,39 +94,204 @@ def save_debug(driver):
                 driver.page_source
             )
 
-
-        print(
-            "保存完了"
-        )
-
+        print("debug保存完了")
 
     except Exception as e:
 
         print(
-            "debug保存失敗:",
+            "debug error:",
             e
         )
 
 
 
+def find_email_input(driver):
+
+    selectors = [
+
+        "input[type='email']",
+
+        "input[name='email']",
+
+        "input[placeholder*='Email']",
+
+        "input[placeholder*='email']",
+
+        "input[type='text']"
+
+    ]
+
+
+    for selector in selectors:
+
+        try:
+
+            element = WebDriverWait(
+                driver,
+                5
+            ).until(
+                EC.presence_of_element_located(
+                    (
+                        By.CSS_SELECTOR,
+                        selector
+                    )
+                )
+            )
+
+            print(
+                "email input found:",
+                selector
+            )
+
+            return element
+
+
+        except:
+
+            pass
+
+
+    # iframe確認
+
+    frames = driver.find_elements(
+        By.TAG_NAME,
+        "iframe"
+    )
+
+    print(
+        "iframe:",
+        len(frames)
+    )
+
+
+    for frame in frames:
+
+        driver.switch_to.frame(frame)
+
+        for selector in selectors:
+
+            try:
+
+                element = driver.find_element(
+                    By.CSS_SELECTOR,
+                    selector
+                )
+
+                print(
+                    "iframe email found:",
+                    selector
+                )
+
+                return element
+
+
+            except:
+
+                pass
+
+
+        driver.switch_to.default_content()
+
+
+    raise Exception(
+        "email input not found"
+    )
+
+
+
+def get_latest_verification_code():
+
+    mail = imaplib.IMAP4_SSL(
+        "imap.gmail.com"
+    )
+
+    mail.login(
+        EMAIL,
+        EMAIL_PASSWORD
+    )
+
+    mail.select(
+        "inbox"
+    )
+
+
+    _, messages = mail.search(
+        None,
+        "ALL"
+    )
+
+
+    for msg_id in reversed(
+        messages[0].split()
+    ):
+
+        _, data = mail.fetch(
+            msg_id,
+            "(RFC822)"
+        )
+
+
+        msg = email.message_from_bytes(
+            data[0][1]
+        )
+
+
+        body = ""
+
+
+        if msg.is_multipart():
+
+            for part in msg.walk():
+
+                if part.get_content_type()=="text/plain":
+
+                    body += part.get_payload(
+                        decode=True
+                    ).decode(
+                        errors="ignore"
+                    )
+
+        else:
+
+            body = msg.get_payload(
+                decode=True
+            ).decode(
+                errors="ignore"
+            )
+
+
+        code = re.search(
+            r"\b\d{6}\b",
+            body
+        )
+
+
+        if code:
+
+            mail.logout()
+
+            return code.group(0)
+
+
+    mail.logout()
+
+    return None
+
+
+
 def main():
 
-    driver = None
+    driver=None
+
 
     try:
 
         print(
-            "🚀 ログイン開始 (Selenium Manager)"
+            "🚀 ログイン開始"
         )
 
 
-        driver = init_driver()
-
-
-        wait = WebDriverWait(
-            driver,
-            30
-        )
+        driver=init_driver()
 
 
         driver.get(
@@ -253,32 +300,24 @@ def main():
 
 
         print(
-            "ページロード完了"
-        )
-
-
-        print(
-            "title:",
-            driver.title
-        )
-
-        print(
-            "url:",
+            "URL:",
             driver.current_url
         )
 
 
-        email_field = wait.until(
-            EC.presence_of_element_located(
-                (
-                    By.NAME,
-                    "email"
-                )
-            )
+        print(
+            "TITLE:",
+            driver.title
         )
 
 
-        email_field.clear()
+        time.sleep(5)
+
+
+        email_field=find_email_input(
+            driver
+        )
+
 
         email_field.send_keys(
             EMAIL
@@ -290,17 +329,20 @@ def main():
         )
 
 
-        continue_btn = wait.until(
+        btn=WebDriverWait(
+            driver,
+            20
+        ).until(
             EC.element_to_be_clickable(
                 (
                     By.XPATH,
-                    "//button[contains(., 'Continue')]"
+                    "//button[contains(.,'Continue')]"
                 )
             )
         )
 
 
-        continue_btn.click()
+        btn.click()
 
 
         print(
@@ -308,72 +350,29 @@ def main():
         )
 
 
-        code = get_latest_verification_code()
+        time.sleep(10)
+
+
+        code=get_latest_verification_code()
 
 
         if not code:
 
             raise Exception(
-                "認証コード取得失敗"
+                "コード取得失敗"
             )
-
-
-        inputs = wait.until(
-            EC.presence_of_all_elements_located(
-                (
-                    By.CSS_SELECTOR,
-                    "input[type='text']"
-                )
-            )
-        )
-
-
-        for i, digit in enumerate(code):
-
-            if i < len(inputs):
-
-                inputs[i].send_keys(
-                    digit
-                )
 
 
         print(
-            "6桁入力完了"
+            "code:",
+            code
         )
-
-
-        final_btn = wait.until(
-            EC.element_to_be_clickable(
-                (
-                    By.XPATH,
-                    "//button[contains(., 'Continue')]"
-                )
-            )
-        )
-
-
-        final_btn.click()
-
-
-        print(
-            "✅ ログイン成功"
-        )
-
-
-        with open(
-            f"{SESSION_DIR}/.valid_session",
-            "w"
-        ) as f:
-
-            f.write(
-                "valid"
-            )
 
 
     except Exception as e:
 
         print(
-            "❌ エラー:",
+            "ERROR:",
             type(e).__name__,
             e
         )
@@ -383,7 +382,6 @@ def main():
             save_debug(
                 driver
             )
-
 
         raise
 
@@ -400,6 +398,6 @@ def main():
 
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
 
     main()
